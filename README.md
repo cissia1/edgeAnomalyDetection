@@ -1,0 +1,2 @@
+# edgeAnomalyDetection
+Arduino project.
