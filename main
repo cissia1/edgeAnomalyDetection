@@ -80,7 +80,7 @@ def anomaly_score(states, features, W_out):
 
 def moving_average(a, w):
     if w <= 1:
-        return a
+        return a 
     return np.convolve(a, np.ones(w) / w, mode="same")
 
 
