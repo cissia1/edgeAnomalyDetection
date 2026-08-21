@@ -2,7 +2,7 @@ import argparse
 import numpy as np
 
 
-#parameters
+# parameters
 sample_rate = 16000
 frame_length = 32
 hop_length = 16
@@ -24,6 +24,7 @@ seed = 42
 def extract_features(wav_path):
     import librosa
     y, _ = librosa.load(wav_path, sr=sample_rate, mono=True)
+    y = trim_edges(y)
     return features_from_signal(y)
 
 
@@ -37,9 +38,8 @@ def features_from_signal(y):
     return logmel.T
 
 
-def build_reservoir(input_dim, rng):        
+def build_reservoir(input_dim, rng):          
     W_in = rng.uniform(-1, 1, size=(reservoir_size, input_dim)) * input_scale
-
     W = rng.uniform(-1, 1, size=(reservoir_size, reservoir_size))
 
     drop = rng.uniform(0, 1, size=W.shape) > sparsity
@@ -83,6 +83,7 @@ def moving_average(a, w):
         return a
     return np.convolve(a, np.ones(w) / w, mode="same")
 
+
 def synthetic_signal(kind, seconds=8.0):
     """Fake 'fan' audio so you can test with no recordings."""
     rng = np.random.default_rng(0 if kind == "healthy" else 1)
@@ -95,6 +96,10 @@ def synthetic_signal(kind, seconds=8.0):
         wobble = 0.12 * np.sin(2 * np.pi * 360 * t)
         sig += thump + wobble
     return sig.astype(np.float32)
+
+def trim_edges(y, seconds=1.0):
+    n = int(sample_rate * seconds)
+    return y[n:-n] if len(y) > 2 * n else y
 
 
 def main():
@@ -118,29 +123,36 @@ def main():
         print(f"Loading test audio:    {args.test}")
         test_feat = extract_features(args.test)
 
-    #normalize
+    # normalize
+    healthy_feat = healthy_feat - healthy_feat.mean()
+    test_feat = test_feat - test_feat.mean()
     mu = healthy_feat.mean(axis=0)
     sig = healthy_feat.std(axis=0) + 1e-8
     healthy_feat = (healthy_feat - mu) / sig
     test_feat = (test_feat - mu) / sig
 
-    #build reservoir
+    # trained readout on healthy only
     rng = np.random.default_rng(seed)         
     W_in, W = build_reservoir(healthy_feat.shape[1], rng)
+    split = int(0.7 * len(healthy_feat))
+    train_feat = healthy_feat[:split]
+    cal_feat = healthy_feat[split:]
 
-    healthy_states = run_reservoir(healthy_feat, W_in, W)
-    W_out = train_readout(healthy_states, healthy_feat)
+    train_states = run_reservoir(train_feat, W_in, W)
+    W_out = train_readout(train_states, train_feat)
 
-    #score both
-    healthy_err = anomaly_score(healthy_states, healthy_feat, W_out)
+    # baseline
+    cal_states = run_reservoir(cal_feat, W_in, W)
+    cal_err = anomaly_score(cal_states, cal_feat, W_out)
+
     test_states = run_reservoir(test_feat, W_in, W)
     test_err = anomaly_score(test_states, test_feat, W_out)
 
-    base = healthy_err[washout:]
-    thresh = base.mean() + threshold * base.std()   
+    base = cal_err[washout:]
+    thresh = base.mean() + threshold * base.std()
 
-    h_s = moving_average(healthy_err, smoothing)
-    t_s = moving_average(test_err, smoothing)  
+    h_s = moving_average(cal_err, smoothing)
+    t_s = moving_average(test_err, smoothing)       
 
     #report
     pct_flagged = 100.0 * np.mean(t_s > thresh)
@@ -177,3 +189,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
