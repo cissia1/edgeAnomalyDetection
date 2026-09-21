@@ -1,12 +1,9 @@
 import glob
 import os
 import time
-
 import numpy as np
-
 import main as eg
 from evaluate import auc, Recording, score_spectrum
-
 
 #The grid
 RHOS   = [0.30, 0.50, 0.70, 0.85, 0.95, 0.99]
@@ -14,13 +11,8 @@ LEAKS  = [0.05, 0.10, 0.20, 0.30, 0.50, 0.80, 1.00]
 
 
 def fit_detector(healthy_feat, rho, leak):
-    """Build a detector with the given memory parameters.
-
-    main.py reads rho and alpha from module-level variables, so we set them
-    on the module before fitting.  Python looks these up when the function
-    RUNS, not when it was defined, so the new values take effect.
-    (Neat trick, but also a design smell: when this gets ported to C, these
-    belong in a config struct passed as an argument, not as globals.)
+    """Build a detector with the given memory parameters. main.py reads rho and alpha from module-level variables, so we set them
+    on the module before fitting. 
     """
     eg.spcrtl_radius = rho
     eg.leak_rate = leak
@@ -85,7 +77,7 @@ def main():
     best_rho, best_leak = RHOS[bi], LEAKS[bj]
     print(f"\nBest cell in the grid : rho={best_rho}, leak={best_leak}, "
           f"mean AUC {mean_grid[bi, bj]:.3f}")
-    print("  (optimistic - this cell was CHOSEN because it scored highest)")
+    print("  (optimistic, this cell was chosen because it scored highest)")
 
     print("\n  per-fault at that setting:")
     for k, name in enumerate(fault_names):
@@ -102,12 +94,12 @@ def main():
         print(f"\n  held out {name:<18} -> tuned rho={RHOS[ti]}, leak={LEAKS[tj]}"
               f"  -> AUC {results[ti, tj, k]:.3f}")
 
-    print(f"\nHONEST tuned performance (leave-one-fault-out): {np.mean(honest):.3f}")
+    print(f"\nHonest tuned performance (leave-one-fault-out): {np.mean(honest):.3f}")
     print(f"Memoryless spectrum baseline                  : {spec_mean:.3f}")
     print(f"Untuned default (rho=0.95, leak=0.30)         : "
           f"{mean_grid[RHOS.index(0.95), LEAKS.index(0.30)]:.3f}")
 
-    verdict = ("temporal modelling HELPS" if np.mean(honest) > spec_mean + 0.01
+    verdict = ("temporal modelling helps" if np.mean(honest) > spec_mean + 0.01
                else "no temporal advantage on these faults")
     print(f"\n=> {verdict}")
 
