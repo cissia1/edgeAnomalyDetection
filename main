@@ -80,7 +80,7 @@ def anomaly_score(states, features, W_out):
 
 def moving_average(a, w):
     if w <= 1:
-        return a 
+        return a
     return np.convolve(a, np.ones(w) / w, mode="same")
 
 
@@ -100,6 +100,45 @@ def synthetic_signal(kind, seconds=8.0):
 def trim_edges(y, seconds=1.0):
     n = int(sample_rate * seconds)
     return y[n:-n] if len(y) > 2 * n else y
+
+class Detector:
+    """EchoGuard detector. fit() = learn what healthy sounds like. score() = per-frame anomaly score for new audio"""
+
+    def fit(self, healthy_feat):
+        # remove overall level, then z-score each band using healthy stats
+        healthy_feat = healthy_feat - healthy_feat.mean()
+        self.mu = healthy_feat.mean(axis=0)
+        self.sig = healthy_feat.std(axis=0) + 1e-8
+        healthy_feat = (healthy_feat - self.mu) / self.sig
+
+        rng = np.random.default_rng(seed)
+        self.W_in, self.W = build_reservoir(healthy_feat.shape[1], rng)
+
+        # train on the first 70%, hold out the last 30% for calibration
+        split = int(0.7 * len(healthy_feat))
+        train_feat = healthy_feat[:split]
+        cal_feat = healthy_feat[split:]
+
+        train_states = run_reservoir(train_feat, self.W_in, self.W)
+        self.W_out = train_readout(train_states, train_feat)
+
+        # threshold comes from HELD-OUT healthy data only
+        self.cal_err = self._score_normalized(cal_feat)
+        base = self.cal_err[washout:]
+        self.thresh = base.mean() + threshold * base.std()
+
+    def normalize(self, feat):
+        """Apply the exact normalization used during fit() to new audio."""
+        feat = feat - feat.mean()
+        return (feat - self.mu) / self.sig
+
+    def score(self, feat):
+        """Per-frame anomaly score for new (un-normalized) features."""
+        return self._score_normalized(self.normalize(feat))
+
+    def _score_normalized(self, feat):
+        states = run_reservoir(feat, self.W_in, self.W)
+        return anomaly_score(states, feat, self.W_out)
 
 
 def main():
@@ -123,33 +162,13 @@ def main():
         print(f"Loading test audio:    {args.test}")
         test_feat = extract_features(args.test)
 
-    # normalize
-    healthy_feat = healthy_feat - healthy_feat.mean()
-    test_feat = test_feat - test_feat.mean()
-    mu = healthy_feat.mean(axis=0)
-    sig = healthy_feat.std(axis=0) + 1e-8
-    healthy_feat = (healthy_feat - mu) / sig
-    test_feat = (test_feat - mu) / sig
+    detector = Detector()
+    detector.fit(healthy_feat)
+    test_err = detector.score(test_feat)
 
-    # trained readout on healthy only
-    rng = np.random.default_rng(seed)         
-    W_in, W = build_reservoir(healthy_feat.shape[1], rng)
-    split = int(0.7 * len(healthy_feat))
-    train_feat = healthy_feat[:split]
-    cal_feat = healthy_feat[split:]
-
-    train_states = run_reservoir(train_feat, W_in, W)
-    W_out = train_readout(train_states, train_feat)
-
-    # baseline
-    cal_states = run_reservoir(cal_feat, W_in, W)
-    cal_err = anomaly_score(cal_states, cal_feat, W_out)
-
-    test_states = run_reservoir(test_feat, W_in, W)
-    test_err = anomaly_score(test_states, test_feat, W_out)
-
+    cal_err = detector.cal_err
     base = cal_err[washout:]
-    thresh = base.mean() + threshold * base.std()
+    thresh = detector.thresh
 
     h_s = moving_average(cal_err, smoothing)
     t_s = moving_average(test_err, smoothing)       
@@ -189,4 +208,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
