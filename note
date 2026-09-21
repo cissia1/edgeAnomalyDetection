@@ -31,3 +31,9 @@ healthy_vs_nut       - Broken fan – loose bearing causes instable base of the 
     test mean score    : 7.9499
     threshold          : 5.4128
     test frames flagged: 96.6%
+
+synthetic            - Synthetic audio.
+    healthy mean score : 7.2490
+    test mean score    : 62.2089
+    threshold          : 16.5807
+    test frames flagged: 100.0%
