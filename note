@@ -1,0 +1,33 @@
+1) healthy_vs_healthy2  - Both recording are held under the same conditions. The healthy2 audio has an external noise pollution (not the fan) introduced into the audio at ~11.4 seconds.
+    healthy mean score : 2.3086
+    test mean score    : 3.6371 
+    threshold          : 5.4128
+    test frames flagged: 1.7%
+
+
+2) healthy_vs_airobs    - airobs refers to the audio recording where an external object was introduced disrupting the air intake.
+    healthy mean score : 2.3086
+    test    mean score : 5.4781
+    threshold          : 5.4128
+    test frames flagged: 38.4%
+
+
+healthy_vs_intro     - Broken fan where RPM is lower than the intended. Causes difference in noise which is caught in audio.
+    healthy mean score : 2.3086
+    test mean score    : 5.6064
+    threshold          : 5.4128
+    test frames flagged: 47.0%  
+
+
+healthy_vs_wiretouch - Broken fan – fan wire collding with the fan blades multiple times every rotation.
+    healthy mean score : 2.3086
+    test mean score : 7.7473
+    threshold          : 5.4128
+    test frames flagged: 93.1%
+
+
+healthy_vs_nut       - Broken fan – loose bearing causes instable base of the fan and rather loud grinding.
+    healthy mean score : 2.3086
+    test mean score    : 7.9499
+    threshold          : 5.4128
+    test frames flagged: 96.6%
