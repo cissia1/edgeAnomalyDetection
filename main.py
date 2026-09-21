@@ -1,7 +1,6 @@
 import argparse
 import numpy as np
 
-
 # parameters
 sample_rate = 16000
 frame_length = 32
@@ -15,11 +14,10 @@ input_scale = 0.50
 sparsity = 0.10
 
 ridge_strength = 1e-6
-washout = 20
+washout = 60
 smoothing = 5
 threshold = 4.0          
 seed = 42
-
 
 def extract_features(wav_path):
     import librosa
@@ -48,7 +46,6 @@ def build_reservoir(input_dim, rng):
     W *= spcrtl_radius / max_eig
     return W_in, W
 
-
 def run_reservoir(features, W_in, W):
     x = np.zeros(reservoir_size)
     states = np.empty((features.shape[0], reservoir_size))
@@ -57,7 +54,6 @@ def run_reservoir(features, W_in, W):
         x = (1 - leak_rate) * x + leak_rate * np.tanh(W_in @ u + W @ x)
         states[t] = x
     return states
-
 
 def train_readout(states, features):
     Z = np.hstack([np.ones((states.shape[0], 1)), features, states])
@@ -70,19 +66,16 @@ def train_readout(states, features):
     W_out = np.linalg.solve(A, B)
     return W_out
 
-
 def anomaly_score(states, features, W_out):
     Z = np.hstack([np.ones((states.shape[0], 1)), features, states])
     pred_next = Z[:-1] @ W_out
     true_next = features[1:]
     return np.mean((pred_next - true_next) ** 2, axis=1)
 
-
 def moving_average(a, w):
     if w <= 1:
         return a
     return np.convolve(a, np.ones(w) / w, mode="same")
-
 
 def synthetic_signal(kind, seconds=8.0):
     """Fake 'fan' audio so you can test with no recordings."""
@@ -105,7 +98,7 @@ class Detector:
     """EchoGuard detector. fit() = learn what healthy sounds like. score() = per-frame anomaly score for new audio"""
 
     def fit(self, healthy_feat):
-        # remove overall level, then z-score each band using healthy stats
+        # remove overall level
         healthy_feat = healthy_feat - healthy_feat.mean()
         self.mu = healthy_feat.mean(axis=0)
         self.sig = healthy_feat.std(axis=0) + 1e-8
@@ -122,7 +115,7 @@ class Detector:
         train_states = run_reservoir(train_feat, self.W_in, self.W)
         self.W_out = train_readout(train_states, train_feat)
 
-        # threshold comes from HELD-OUT healthy data only
+        # threshold comes from healthy data only
         self.cal_err = self._score_normalized(cal_feat)
         base = self.cal_err[washout:]
         self.thresh = base.mean() + threshold * base.std()
