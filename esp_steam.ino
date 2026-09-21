@@ -1,5 +1,5 @@
 const uint32_t SAMPLE_RATE    = 16000;
-const int      PACKET_SAMPLES = 256;
+const int PACKET_SAMPLES       = 256;
 const uint32_t PACKET_US      = 1000000UL * PACKET_SAMPLES / SAMPLE_RATE;
 const uint32_t BAUD           = 921600;  
 
