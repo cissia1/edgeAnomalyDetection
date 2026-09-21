@@ -89,3 +89,79 @@ def main():
 
     #Scoring every recording with every method
     methods = ["rms_raw", "rms", "spectrum", "reservoir"]
+
+ def score_all(rec):
+        w = eg.washout
+        return {
+            "rms_raw":   score_rms_raw(rec, ref)[w:],
+            "rms":       score_rms(rec, ref)[w:],
+            "spectrum":  score_spectrum(rec, ref, detector)[w:],
+            "reservoir": score_reservoir(rec, ref, detector)[w:],
+        }
+
+    control = Recording(control_path)
+    control_scores = score_all(control)
+
+    cal_err = detector.cal_err[eg.washout:]
+
+    faults = []
+    for p in fault_paths:
+        rec = Recording(p)
+        faults.append((rec.name, score_all(rec)))
+
+    #Table 1: AUC, fault vs the separate healthy session
+    print("AUC - each fault vs. healthy_2  (0.5 = useless, 1.0 = perfect)")
+    header = f"{'fault':<22}" + "".join(f"{m:>11}" for m in methods)
+    print(header)
+    print("-" * len(header))
+
+    totals = {m: [] for m in methods}
+    for name, sc in faults:
+        row = f"{name:<22}"
+        for m in methods:
+            a = auc(control_scores[m], sc[m])
+            totals[m].append(a)
+            row += f"{a:>11.3f}"
+        print(row)
+
+    print("-" * len(header))
+    print(f"{'MEAN':<22}" + "".join(f"{np.mean(totals[m]):>11.3f}" for m in methods))
+
+    #Table 2: operating point at the detectors own threshold
+    print(f"\nAt the reservoir's threshold ({detector.thresh:.3f}):")
+    fa = 100.0 * (control_scores["reservoir"] > detector.thresh).mean()
+    print(f"  false-alarm rate on healthy_2 : {fa:5.1f}% of frames")
+    for name, sc in faults:
+        det = 100.0 * (sc["reservoir"] > detector.thresh).mean()
+        print(f"  detection rate, {name:<20}: {det:5.1f}% of frames")
+
+    #how different are two healthy sessions
+    sess = auc(cal_err, control_scores["reservoir"])
+    print(f"\nSession effect (held-out healthy vs healthy_2): AUC {sess:.3f}")
+    print("  1.00 = the two healthy sessions are perfectly distinguishable")
+    print("  0.50 = indistinguishable (ideal - all that is left is the fan)")
+
+    #ROC curves
+    try:
+        import matplotlib.pyplot as plt
+        n = len(faults)
+        fig, axes = plt.subplots(1, n, figsize=(4.2 * n, 4.0), squeeze=False)
+        for ax, (name, sc) in zip(axes[0], faults):
+            for m in methods:
+                fpr, tpr = roc_points(control_scores[m], sc[m])
+                ax.plot(fpr, tpr, lw=1.4,
+                        label=f"{m} ({auc(control_scores[m], sc[m]):.3f})")
+            ax.plot([0, 1], [0, 1], "k--", lw=0.8, label="chance (0.500)")
+            ax.set_title(name)
+            ax.set_xlabel("false-positive rate")
+            ax.set_ylabel("true-positive rate")
+            ax.legend(fontsize=8, loc="lower right")
+        plt.tight_layout()
+        plt.savefig("roc_curves.png", dpi=120)
+        print("\nSaved ROC curves to roc_curves.png")
+    except ImportError:
+        print("\n(matplotlib not installed - skipping ROC plot)")
+
+
+if __name__ == "__main__":
+    main()
