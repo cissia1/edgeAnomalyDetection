@@ -3,7 +3,7 @@ import os
 import numpy as np
 import main as eg 
 
-# Metrics
+#Metrics
 def auc(neg_scores, pos_scores):
     """Area under the ROC curve.
       Equivalently: the probability that a randomly chosen fault frame scores
@@ -25,7 +25,7 @@ def roc_points(neg_scores, pos_scores, n=200):
     tpr = np.array([(pos_scores >= t).mean() for t in thresholds])
     return fpr, tpr
 
-# Audio loading
+#Audio loading
 def load_audio(path):
     import librosa
     y, _ = librosa.load(path, sr=eg.sample_rate, mono=True)
@@ -45,3 +45,47 @@ class Recording:
         y = load_audio(path)
         self.features = eg.features_from_signal(y)
         self.rms = rms_db(y)
+
+#These are my 4 scores, with eachm method judged on the same frames.
+def score_rms_raw(rec, ref):
+    return np.abs(rec.rms - ref["rms_mu"])[1:]
+
+def score_rms(rec, ref):
+    centred = rec.rms - rec.rms.mean()
+    return np.abs(centred - ref["rms_centred_mu"])[1:]
+
+def score_spectrum(rec, ref, detector):
+    u = detector.normalize(rec.features)
+    return np.mean(u[1:] ** 2, axis=1)
+
+def score_reservoir(rec, ref, detector):
+    return detector.score(rec.features)
+
+def main():
+    healthy_path = "recordings/healthy.wav"
+    control_path = "recordings/healthy_2.wav"
+    fault_paths = sorted(glob.glob("recordings/fault_*.wav"))
+
+    for p in (healthy_path, control_path):
+        if not os.path.exists(p):
+            raise SystemExit(f"missing {p}")
+    if not fault_paths:
+        raise SystemExit("no recordings/fault_*.wav files found")
+
+    print(f"training on : {healthy_path}")
+    print(f"control     : {control_path}")
+    print(f"faults      : {len(fault_paths)} file(s)\n")
+
+    #teach mode on healthy
+    healthy = Recording(healthy_path)
+    detector = eg.Detector()
+    detector.fit(healthy.features)
+
+    #Reference statistics for the RMS baselines
+    ref = {
+        "rms_mu": healthy.rms.mean(),
+        "rms_centred_mu": (healthy.rms - healthy.rms.mean()).mean(),
+    }
+
+    #Scoring every recording with every method
+    methods = ["rms_raw", "rms", "spectrum", "reservoir"]
