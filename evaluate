@@ -1,0 +1,26 @@
+import glob
+import os
+import numpy as np
+import main as eg 
+
+# Metrics
+def auc(neg_scores, pos_scores):
+    """Area under the ROC curve.
+      Equivalently: the probability that a randomly chosen fault frame scores
+      higher than a randomly chosen healthy frame. Computed from ranks (the Mann-Whitney U identity), which handles ties
+      correctly and needs no threshold sweep.
+    """
+    from scipy.stats import rankdata
+    ranks = rankdata(np.concatenate([neg_scores, pos_scores]))
+    n_neg, n_pos = len(neg_scores), len(pos_scores)
+    rank_sum_pos = ranks[n_neg:].sum()
+    return (rank_sum_pos - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg)
+
+def roc_points(neg_scores, pos_scores, n=200):
+   #false-positive rate, true-positive rate
+    lo = min(neg_scores.min(), pos_scores.min())
+    hi = max(neg_scores.max(), pos_scores.max())
+    thresholds = np.linspace(hi, lo, n)
+    fpr = np.array([(neg_scores >= t).mean() for t in thresholds])
+    tpr = np.array([(pos_scores >= t).mean() for t in thresholds])
+    return fpr, tpr
