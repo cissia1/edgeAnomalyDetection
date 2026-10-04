@@ -94,12 +94,21 @@ def trim_edges(y, seconds=1.0):
     n = int(sample_rate * seconds)
     return y[n:-n] if len(y) > 2 * n else y
 
+def remove_level(feat):
+    frame_level = feat.mean(axis=1)
+    level = np.empty_like(frame_level)
+    avg = 0.0
+    for i, x in enumerate(frame_level):
+        avg += (x - avg) / min(i + 1, running_frames)
+        level[i] = avg
+    return feat - level[:, None]
+
 class Detector:
     """EchoGuard detector. fit() = learn what healthy sounds like. score() = per-frame anomaly score for new audio"""
 
     def fit(self, healthy_feat):
         # remove overall level
-        healthy_feat = healthy_feat - healthy_feat.mean()
+        healthy_feat = remove_level(healthy_feat)
         self.mu = healthy_feat.mean(axis=0)
         self.sig = healthy_feat.std(axis=0) + 1e-8
         healthy_feat = (healthy_feat - self.mu) / self.sig
@@ -122,7 +131,7 @@ class Detector:
 
     def normalize(self, feat):
         """Apply the exact normalization used during fit() to new audio."""
-        feat = feat - feat.mean()
+        feat = remove_level(feat)
         return (feat - self.mu) / self.sig
 
     def score(self, feat):
