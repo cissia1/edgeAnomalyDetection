@@ -1,6 +1,6 @@
 import argparse
 import numpy as np
-
+ 
 # parameters
 sample_rate = 16000
 frame_length = 32
